@@ -5,6 +5,7 @@ deepdiff==7.0.1
 dm-env==1.6
 dm-tree==0.1.8
 enum34==1.1.10
+gym==0.7.4
 idna==3.7
 mock==5.1.0
 mpyq==0.2.5
