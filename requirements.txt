@@ -11,7 +11,7 @@ mpyq==0.2.5
 numpy==2.0.1
 ordered-set==4.1.0
 portpicker==1.6.0
-protobuf==5.27.3
+protobuf==3.20.3
 psutil==6.0.0
 pygame==2.6.0
 PySC2==4.0.0
