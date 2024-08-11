@@ -4,7 +4,7 @@
 @author: Oliver Just-De Bleser
 """
 
-from pysc2.agents import base_agent
+
 from pysc2.env import sc2_env
 from pysc2.lib import actions, features, units
 from absl import app
@@ -12,14 +12,12 @@ import random
 from agent import Agent
 
 def main(unused_argv):
-    agent = PyAgent()
+    agent = Agent()
     try:
         while True:
             with sc2_env.SC2Env(
-                    map_name="Simple64",
-                    players=[sc2_env.Agent(sc2_env.Race.terran),
-                             sc2_env.Bot(sc2_env.Race.random,
-                                         sc2_env.Difficulty.very_easy)],
+                    map_name="BuildMarines",
+                    players=[sc2_env.Agent(sc2_env.Race.terran)],
                     agent_interface_format=features.AgentInterfaceFormat(
                         feature_dimensions=features.Dimensions(screen=84, minimap=64),
                         use_feature_units=True),
