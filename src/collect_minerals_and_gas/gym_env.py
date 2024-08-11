@@ -1,6 +1,10 @@
+import random
 import gym
 from gym import spaces
 import numpy as np
+from pysc2.lib import actions
+
+from src.collect_minerals_and_gas.agent import _MINERAL_FIELD, _PLAYER_RELATIVE, SELECT_POINT, NO_OP, HARVEST_GATHER, _ASSIMILATOR, _PROBE
 from pysc2.env import sc2_env
 
 class SC2Env(gym.Env):
@@ -62,19 +66,19 @@ class SC2Env(gym.Env):
             probes = self._get_units_by_type(_PROBE)
             if probes:
                 probe = random.choice(probes)
-                return actions.FunctionCall(SELECT_POINT, [actions.NOT_QUEUED, (probe.x, probe.y)])
+                return actions.FunctionCall(SELECT_POINT, [0, (probe.x, probe.y)])
         elif action == 2:
             # Harvest mineral
             mineral_fields = self._get_units_by_type(_MINERAL_FIELD)
             if mineral_fields:
                 mf = random.choice(mineral_fields)
-                return actions.FunctionCall(HARVEST_GATHER, [actions.NOT_QUEUED, (mf.x, mf.y)])
+                return actions.FunctionCall(HARVEST_GATHER, [0, (mf.x, mf.y)])
         elif action == 3:
             # Harvest gas
             assimilators = self._get_units_by_type(_ASSIMILATOR)
             if assimilators:
                 assimilator = random.choice(assimilators)
-                return actions.FunctionCall(HARVEST_GATHER, [actions.NOT_QUEUED, (assimilator.x, assimilator.y)])
+                return actions.FunctionCall(HARVEST_GATHER, [0, (assimilator.x, assimilator.y)])
 
         return actions.FunctionCall(NO_OP, [])
 
@@ -82,7 +86,11 @@ class SC2Env(gym.Env):
         return [unit for unit in self.current_obs[0].observation.raw_units if unit.unit_type == unit_type]
 
     def render(self, mode='human'):
-        pass
+        if mode == 'human':
+            # Rendering for human mode is typically done via the visualization flag
+            self.env.render()
+        else:
+            super(SC2Env, self).render(mode=mode)
 
     def close(self):
         self.env.close()
