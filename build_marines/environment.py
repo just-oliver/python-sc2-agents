@@ -10,7 +10,6 @@ from pysc2.lib import actions, features, units
 from absl import app
 import random
 from agent import Agent
-import tensorflow as tf
 
 def main(unused_argv):
     agent = Agent()
