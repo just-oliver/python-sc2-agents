@@ -21,7 +21,7 @@ def main(unused_argv):
                     agent_interface_format=features.AgentInterfaceFormat(
                         feature_dimensions=features.Dimensions(screen=84, minimap=64),
                         use_feature_units=True),
-                step_mul=16, # action 2x per second, set to 16 for action per second
+                step_mul=1, # action 2x per second, set to 16 for action per second
                 game_steps_per_episode=0,
                 visualize=True) as env:
                 agent.setup(env.observation_spec(), env.action_spec())
