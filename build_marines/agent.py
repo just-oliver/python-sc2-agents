@@ -4,6 +4,7 @@
 @author: Oliver Just-De Bleser
 """
 
+
 from pysc2.agents import base_agent
 from pysc2.lib import actions, features, units
 import random
@@ -12,27 +13,49 @@ from tensorflow.keras.optimizers import Adam
 from actor_critic import ActorCriticNetwork
 import numpy as np
 import matplotlib.pyplot as plt
+import tensorflow_probability as tfp
 
 
 class Agent(base_agent.BaseAgent):
-    def __init__(self, alpha=0.0003, gamma=0.99, n_actions=10):
+    def __init__(self, alpha=1e-4, gamma=0.99, n_actions=11):
         super(Agent, self).__init__()
         self.gamma = gamma
         self.n_actions = n_actions
         self.action = None
         self.action_space = [i for i in range(self.n_actions)]
-        #self.actor_critic = ActorCriticNetwork()
+        self.actor_critic = ActorCriticNetwork(n_actions=n_actions)
+        self.actor_critic.compile(optimizer=Adam(learning_rate=alpha))
 
-    def choose_action(self, obs):
-        state = tf.convert_to_tensor
+    def choose_action(self, scalar_observations, spacial_observations):
+        scalar_state = tf.convert_to_tensor([scalar_observations])
+        spacial_state = tf.convert_to_tensor([spacial_observations], dtype=tf.float16)
+        
+        _, probs_action, x, y = self.actor_critic(scalar_state, spacial_state)
+        print(probs_action)
+        action_probabilities = tfp.distributions.Categorical(probs=probs_action)
+        action = action_probabilities.sample()
+        log_prob = action_probabilities.log_prob(action)
+        self.action = action
+        return action.numpy()[0], x, y
+    
+    def save_models(self):
+        print('... saving models ...')
+        self.actor_critic.save_weights(self.actor_critic.checkpoint_file)
+    
+    def load_models(self):
+        print('... loading models ...')
+        self.actor_critic.load_weights(self.actor_critic.checkpoint_file)
+    
+    def learn(self, state, reward, state_, done):
+        pass
+    
     def step(self, obs):
         super(Agent, self).step(obs)
-        # creating our state space to feed to the a
+        # creating our state space to feed to the a Neural network
         minerals = obs.observation.player.minerals
         food_used = obs.observation.player.food_used
         food_cap = obs.observation.player.food_cap
         supply_remaining = food_cap - food_used
-        scv_units = [unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SCV]
         scvs_count = len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SCV])
         marines_count = len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Marine])
         barracks_count = len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Barracks and unit.build_progress == 100])
@@ -65,7 +88,7 @@ class Agent(base_agent.BaseAgent):
         active = np.array(feature_screen[features.SCREEN_FEATURES.active.index])
         pathable = np.array(feature_screen[features.SCREEN_FEATURES.pathable.index])
         
-        spacial_observations = np.array(
+        spacial_observations = np.stack([
             unit_type,
             command_screen,
             marine_screen,
@@ -76,25 +99,17 @@ class Agent(base_agent.BaseAgent):
             unit_density,
             active,
             pathable
-            )
+        ], axis=-1)
         
-        # if self.steps == 16:
-        #     return self.select_scv(obs)
-        # if obs.observation.player.minerals >= 100 and len(self.get_units_by_type(obs,  units.Terran.SupplyDepot)) == 0:
-        #     return self.build_supply(obs, (40,60))
-        # if obs.observation.player.minerals >= 150 and len(self.get_units_by_type(obs, units.Terran.SupplyDepot)) > 0 and len(self.get_units_by_type(obs,  units.Terran.Barracks)) == 0:
-        #     return self.build_baracks(obs, (40, 20))
-        # if len(self.get_units_by_type(obs, units.Terran.Barracks)) > 0 and (not self.unit_type_is_selected(obs, units.Terran.Barracks)):
-        #     return self.select_barracks(obs)
-        #
-        # if self.unit_type_is_selected(obs, units.Terran.Barracks):
-        #     return self.train_marine(obs)
+        
+       
+        print(self.choose_action(scalar_observations, spacial_observations))
         return actions.FUNCTIONS.no_op()
 
-    def select_command(self, obs, i=0):
+    def select_command(self, obs):
         commands = self.get_units_by_type(obs, units.Terran.CommandCenter)
         if len(commands) > 0:
-            command = commands[i]
+            command = random.choice(commands)
             return actions.FUNCTIONS.select_point("select", (command.x,command.y))
         return actions.FUNCTIONS.no_op()
 
@@ -104,10 +119,10 @@ class Agent(base_agent.BaseAgent):
             return actions.FUNCTIONS.Train_SCV_quick('now')
         return actions.FUNCTIONS.no_op()
 
-    def select_scv(self, obs, i=0):
+    def select_scv(self, obs):
         scvs = self.get_units_by_type(obs, units.Terran.SCV)
         if len(scvs) > 0:
-            scv = scvs[i]
+            scv = random.choice(scvs)
             return actions.FUNCTIONS.select_point("select", (scv.x,scv.y))
         return actions.FUNCTIONS.no_op()
 
@@ -123,10 +138,10 @@ class Agent(base_agent.BaseAgent):
                 return actions.FUNCTIONS.Build_Barracks_screen('now', position)
         return actions.FUNCTIONS.no_op()
 
-    def select_barracks(self, obs, i=0):
+    def select_barracks(self, obs):
         barracks = self.get_units_by_type(obs, units.Terran.Barracks)
         if len(barracks) > 0:
-            barrack = barracks[i]
+            barrack = random.choice(barracks)
             return actions.FUNCTIONS.select_point("select", (barrack.x, barrack.y))
         return actions.FUNCTIONS.no_op()
 
@@ -147,13 +162,16 @@ class Agent(base_agent.BaseAgent):
     def select_all_marines(self, obs):
         marines = self.get_units_by_type(obs, units.Terran.Marine)
         if len(marines) > 0:
-            marine = marines
+            marine = random.choice(marines)
             return actions.FUNCTIONS.select_point('select_all_type', (marine.x, marine.y))
         return actions.FUNCTIONS.no_op()
 
     def move_marines(self, obs, position):
         if self.unit_type_is_selected(obs, units.Terran.Marine):
             return actions.FUNCTIONS.Move_screen("now", position)
+        return actions.FUNCTIONS.no_op()
+    
+    def no_op(self):
         return actions.FUNCTIONS.no_op()
 
     def get_units_by_type(self, obs, unit_type):
@@ -169,4 +187,4 @@ class Agent(base_agent.BaseAgent):
             obs.observation.multi_select[0].unit_type == unit_type):
             return True
         return False
-
+    

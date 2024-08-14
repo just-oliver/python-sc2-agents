@@ -9,7 +9,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D, Concatenate, Flatten
 
 class ActorCriticNetwork(keras.Model):
-    def __init__(self, n_actions, fc1_dims=1024, fc2_dims=512,
+    def __init__(self, n_actions, fc1_dims=512, fc2_dims=256,
                  name='actor_critic', chkpt_dir='tmp/actor_critic'):
         super(ActorCriticNetwork, self).__init__()
         
@@ -22,19 +22,24 @@ class ActorCriticNetwork(keras.Model):
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_ac')
 
         # spacial data layers
-        self.conv1 = Conv2D(32, (8, 8), strides=4, activation='relu', padding='same', input_shape=(84,84,9))
+        self.conv1 = Conv2D(32, (8, 8), strides=4, activation='relu', padding='same', input_shape=(1,84,84,10))
         self.pool1 = MaxPooling2D(pool_size=(2, 2))
         self.conv2 = Conv2D(64, (4, 4), strides=2, activation='relu', padding='same')
         self.pool2 = MaxPooling2D(pool_size=(2, 2))
         self.conv3 = Conv2D(64, (3, 3), strides=1, activation='relu', padding='same')
         self.pool3 = MaxPooling2D(pool_size=(2, 2))
+        # flatten spacial features for Dense layers
         self.flatten = Flatten()
+        # shared layers
         self.concat = Concatenate()
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
-        self.x_pos = Dense(84, activation='softmax')
-        self.y_pos = Dense(84, activation='softmax')
+        # positional outputs
+        self.x_pos = Dense(1, activation='sigmoid')
+        self.y_pos = Dense(1, activation='sigmoid')
+        # value output
         self.v = Dense(1, activation=None)
+        # policy output
         self.pi = Dense(n_actions, activation='softmax')
         
 
@@ -46,11 +51,17 @@ class ActorCriticNetwork(keras.Model):
         conv_3 = self.conv3(pool_2)
         pool_3 = self.pool3(conv_3)
         flatten = self.flatten(pool_3)
-        merged = self.concat(scalar_observations, flatten)
+        # shared layers
+        merged = self.concat([scalar_observations, flatten])
         fc_1 = self.fc1(merged)
-        fc_
-        
-        value = self.fc1()
-        value = self.fc2(value)
-        v = self.v(value)
-        pi = self.pi(value)
+        fc_2 = self.fc2(fc_1)
+        # position output
+        x_pos = self.x_pos(fc_2)
+        y_pos = self.y_pos(fc_2)
+        # value output
+        v = self.v(fc_2)
+        # policy output
+        pi = self.pi(fc_2)
+        x_pos = int(x_pos * 83)
+        y_pos = int(y_pos * 83)
+        return v, pi, x_pos, y_pos
