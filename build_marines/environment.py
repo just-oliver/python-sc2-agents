@@ -18,7 +18,7 @@ def main(unused_argv):
         best_score = 0
         score_history = []
         load_checkpoint = False
-        with open(f'data_{lr}.csv', 'w') as f:
+        with open(f'actor_critic_data_{lr}.csv', 'w') as f:
             try:
                 for i in range(100):
                     with sc2_env.SC2Env(

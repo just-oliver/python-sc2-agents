@@ -101,74 +101,71 @@ class Agent(base_agent.BaseAgent):
     
     def step(self, obs):
         super(Agent, self).step(obs)
-        if self.steps % 8 == 0:
-            if self.marine_training:
-                self.bonus = 1
-                self.marine_training = False
-            units_types = [unit.unit_type for unit in obs.observation['feature_units']]
-            if units.Terran.SupplyDepot in units_types  and units.Terran.SupplyDepot not in self.prev_units:
-                self.bonus = 1
-            elif units.Terran.Barracks in units_types and units.Terran.Barracks not in self.prev_units:
-                self.bonus = 1
-            else:
-                self.bonus = 0
-            
-            self.prev_units = units_types
-            # if obs.reward == 0:
-            #     self.punishment = 1e-5
-            # creating our state space to feed to the a Neural network
-            # scale input values between 0 and 1 to avoid exploding graidients
-            minerals = min_max_scale(obs.observation.player.minerals, 0, 5000)
-            supply_remaining = min_max_scale(obs.observation.player.food_cap-obs.observation.player.food_used, 0, 20)
-            scvs_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SCV]), 0, 16)
-            marines_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Marine]), 0, 100)
-            barracks_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Barracks and unit.build_progress == 100]),0, 8)
-            barracks_building = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Barracks and unit.build_progress < 100]), 0, 8)
-            sd_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SupplyDepot and unit.build_progress == 100]), 0, 10)
-            sd_building = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SupplyDepot and unit.build_progress < 100]), 0, 10)
-            barracks_selected = int(self.unit_type_is_selected(obs, units.Terran.Barracks))
-            scalar_observations = np.array([
-                minerals,
-                supply_remaining,
-                scvs_count,
-                marines_count,
-                barracks_count,
-                barracks_building,
-                sd_count,
-                sd_building,
-                barracks_selected
-            ])
-            
-            # Assuming obs is your current observation
-            feature_screen = obs.observation['feature_screen']
-            unit_density = np.array(feature_screen[features.SCREEN_FEATURES.unit_density.index])
-            
-            
-            scalar_state = tf.convert_to_tensor([scalar_observations], dtype=tf.float32)
-            spacial_state = tf.convert_to_tensor([unit_density], dtype=tf.float32)
-            spacial_state = tf.expand_dims(spacial_state, axis=-1)
-            
-
-            
-            action = self.choose_action(scalar_state, spacial_state)
-            if action == 11:
-                # hack fix as I couldn't find out what was causing key error 11, something to do with the distribuition
-                action = 10
-            if self.prev_action and self.train:
-                self.learn(scalar_state, spacial_state, obs.reward - self.bonus, obs.last())
-            self.prev_action = action
-            self.prev_scalar_state = scalar_state
-            self.prev_spacial_state = spacial_state
-            self.punishment = 0
-            if action in [3, 4, 6, 9]:
-                x = random.randint(0,83)
-                y = random.randint(0,83)
-                return self.action_map[action](obs, (x,y))
-            if action == 7:
-                self.marine_training = True
-            return self.action_map[action](obs)
+        if self.marine_training:
+            self.bonus = 1
+            self.marine_training = False
+        units_types = [unit.unit_type for unit in obs.observation['feature_units']]
+        if units.Terran.SupplyDepot in units_types  and units.Terran.SupplyDepot not in self.prev_units:
+            self.bonus = 1
+        elif units.Terran.Barracks in units_types and units.Terran.Barracks not in self.prev_units:
+            self.bonus = 1
         else:
-            return actions.FUNCTIONS.no_op()
+            self.bonus = 0
+        
+        self.prev_units = units_types
+        # if obs.reward == 0:
+        #     self.punishment = 1e-5
+        # creating our state space to feed to the a Neural network
+        # scale input values between 0 and 1 to avoid exploding graidients
+        minerals = min_max_scale(obs.observation.player.minerals, 0, 5000)
+        supply_remaining = min_max_scale(obs.observation.player.food_cap-obs.observation.player.food_used, 0, 20)
+        scvs_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SCV]), 0, 16)
+        marines_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Marine]), 0, 100)
+        barracks_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Barracks and unit.build_progress == 100]),0, 8)
+        barracks_building = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.Barracks and unit.build_progress < 100]), 0, 8)
+        sd_count = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SupplyDepot and unit.build_progress == 100]), 0, 10)
+        sd_building = min_max_scale(len([unit for unit in obs.observation['feature_units'] if unit.unit_type == units.Terran.SupplyDepot and unit.build_progress < 100]), 0, 10)
+        barracks_selected = int(self.unit_type_is_selected(obs, units.Terran.Barracks))
+        scalar_observations = np.array([
+            minerals,
+            supply_remaining,
+            scvs_count,
+            marines_count,
+            barracks_count,
+            barracks_building,
+            sd_count,
+            sd_building,
+            barracks_selected
+        ])
+        
+        # Assuming obs is your current observation
+        feature_screen = obs.observation['feature_screen']
+        unit_density = np.array(feature_screen[features.SCREEN_FEATURES.unit_density.index])
+        
+        
+        scalar_state = tf.convert_to_tensor([scalar_observations], dtype=tf.float32)
+        spacial_state = tf.convert_to_tensor([unit_density], dtype=tf.float32)
+        spacial_state = tf.expand_dims(spacial_state, axis=-1)
+        
+
+        
+        action = self.choose_action(scalar_state, spacial_state)
+        if action == 11:
+            # hack fix as I couldn't find out what was causing key error 11, something to do with the distribuition
+            action = 10
+        if self.prev_action and self.train:
+            self.learn(scalar_state, spacial_state, obs.reward - self.bonus, obs.last())
+        self.prev_action = action
+        self.prev_scalar_state = scalar_state
+        self.prev_spacial_state = spacial_state
+        self.punishment = 0
+        if action in [3, 4, 6, 9]:
+            x = random.randint(0,83)
+            y = random.randint(0,83)
+            return self.action_map[action](obs, (x,y))
+        if action == 7:
+            self.marine_training = True
+        return self.action_map[action](obs)
         
     def select_command(self, obs):
         commands = self.get_units_by_type(obs, units.Terran.CommandCenter)
