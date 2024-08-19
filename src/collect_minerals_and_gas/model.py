@@ -9,6 +9,10 @@ from pysc2.env import sc2_env
 from pysc2.lib import actions, features
 from collections import deque
 import random
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
+import csv
 
 from absl import flags
 import sys
@@ -33,8 +37,6 @@ class CollectMineralsAndGasEnv(gym.Env):
                 agent_interface_format=features.AgentInterfaceFormat(
                     feature_dimensions=features.Dimensions(screen=84, minimap=64),
                     use_feature_units=True),
-                step_mul=16,
-                game_steps_per_episode=0,
                 visualize=True)
         except Exception as e:
             print(f"Error initializing SC2Env: {e}")
@@ -56,11 +58,11 @@ class CollectMineralsAndGasEnv(gym.Env):
 
         # Reward for collecting minerals
         mineral_difference = obs.observation.player.minerals - self.previous_minerals
-        reward += mineral_difference * 1  # 1 point per mineral collected
+        reward += mineral_difference * 10 # 1 point per mineral collected
 
         # Reward for collecting gas
         gas_difference = obs.observation.player.vespene - self.previous_gas
-        reward += gas_difference * 2  # 2 points per gas collected
+        reward += gas_difference * 20  # 2 points per gas collected
 
         # Reward for creating workers
         worker_difference = obs.observation.player.food_workers - self.previous_workers
@@ -110,10 +112,12 @@ class CollectMineralsAndGasEnv(gym.Env):
         reward = self.calculate_reward(obs)
         done = obs.last()
         score = obs.observation.score_cumulative[0]
+        current_minerals_collected = obs.observation.score_cumulative[5]
+        current_vespene_collected = obs.observation.score_cumulative[7]
 
         self.available_actions = obs.observation.available_actions
 
-        return state, reward, done, {'score': score}
+        return state, reward, done, {'score': score}, current_minerals_collected,current_vespene_collected
 
     def close(self):
         if hasattr(self, 'env') and self.env is not None:
@@ -132,9 +136,6 @@ class DQN(tf.keras.Model):
         return self.dense3(x)
 
 
-tf.config.run_functions_eagerly(True)
-
-
 class DQNAgent:
     def __init__(self, state_size, action_size):
         self.state_size = state_size
@@ -146,8 +147,8 @@ class DQNAgent:
         self.epsilon_decay = 0.995
         self.learning_rate = 0.001
         self.model = self._build_model()
-        self.frame_skip = 8  # Only predict every 8th frame
-        self.update_frequency = 1000  # Update the model every 1000 steps
+        self.frame_skip = 64
+        self.update_frequency = 4000  # Update the model every 1000 steps
 
     def _build_model(self):
         model = Sequential([
@@ -197,38 +198,61 @@ def main():
         action_size = env.action_space.n
         agent = DQNAgent(state_size, action_size)
         batch_size = 32
-        episodes = 1000
+        episodes = 100
         total_steps = 0
+        frame_skip = 64  # Number of frames to skip
 
-        for e in range(episodes):
-            state = env.reset()
-            total_score = 0
-            total_reward = 0
-            for time in range(1000):  # Increase max steps per episode
-                if env.available_actions is None or len(env.available_actions) == 0:
-                    print("No available actions. Resetting environment.")
-                    break
+        # Lists to store results
+        all_scores = []
+        all_rewards = []
+        col_minerals = []
+        col_gas = []
+        # Open CSV file for writing results
+        with open('training_results.csv', 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(['Episode', 'Score', 'Total Reward', 'Epsilon'])
 
-                if time % agent.frame_skip == 0:
-                    action = agent.act(state, env.available_actions)
+            # Use tqdm for a progress bar
+            for e in tqdm(range(episodes), desc="Training Progress"):
+                state = env.reset()
+                total_score = 0
+                total_reward = 0
+                done = False
+                step = 0
 
-                next_state, reward, done, info = env.step(action)
-                total_reward += reward
-                total_score += info.get('score', 0)  # Assuming the environment returns a score in info
+                while not done:
+                    if step % frame_skip == 0:
+                        action = agent.act(state, env.available_actions)
 
-                if time % agent.frame_skip == 0:
-                    agent.remember(state, action, reward, next_state, done)
-                    state = next_state
+                    next_state, reward, done, info, minerals, gas = env.step(action)
+                    total_reward += reward
+                    total_score += info.get('score', 0)
 
-                total_steps += 1
+                    if step % frame_skip == 0:
+                        agent.remember(state, action, reward, next_state, done)
+                        state = next_state
 
-                if done:
-                    break
+                        if len(agent.memory) > batch_size:
+                            agent.replay(batch_size)
 
-                if len(agent.memory) > batch_size and total_steps % agent.update_frequency == 0:
-                    agent.replay(batch_size)
+                    step += 1
+                    total_steps += 1
 
-            print(f"Episode: {e}/{episodes}, Score: {total_score}, Total Reward: {total_reward}, Epsilon: {agent.epsilon:.2}")
+                # Store results
+                all_scores.append(total_score)
+                all_rewards.append(total_reward)
+                col_minerals.append(minerals)
+                col_gas.append(gas)
+
+                # Write results to CSV
+                csv_writer.writerow([e+1, total_score, total_reward, agent.epsilon, minerals, gas])
+
+                # Print only every 10 episodes to reduce console output
+
+                print(f"Episode: {e+1}/{episodes}, Score: {total_score}, Total Reward: {total_reward:.2f}, Epsilon: {agent.epsilon:.2f}, Minerals Collected: {minerals}, Gas Collected: {gas}")
+
+        # Save the trained model
+        agent.save("mineral_collector_model.h5")
 
     except Exception as e:
         print(f"An error occurred during training: {e}")
@@ -237,7 +261,6 @@ def main():
     finally:
         if 'env' in locals():
             env.close()
-
 
 if __name__ == "__main__":
     main()
